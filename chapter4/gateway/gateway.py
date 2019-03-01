@@ -1,24 +1,52 @@
 from sensor import Sensor
 from bluepy.btle import Scanner
 from datetime import datetime
+from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 
+import json
 import time
 import sys
+import config
 
 class Gateway(object):
 
     def __init__(self):
         self.scanner = Scanner()
         self.sensors = {}
+        self.client = self._create_client()
+
+    def _create_client(self):
+        # AWS IoTのクライアント作成
+        client = AWSIoTMQTTClient(config.DEVICE_NAME)
+        # クライアントの初期設定    
+        client.configureEndpoint(config.AWS_ENDPOINT, 8883)
+        client.configureAutoReconnectBackoffTime(1, 32, 20)
+        client.configureOfflinePublishQueueing(-1)
+        client.configureDrainingFrequency(2)
+        client.configureConnectDisconnectTimeout(300)
+        client.configureMQTTOperationTimeout(10)
+        client.configureCredentials(config.AWS_ROOTCA,
+                                    config.AWS_KEY,
+                                    config.AWS_CERT)
+
+        client.connect(60)
+        client.publish('gateway/'+config.DEVICE_NAME+'/stat', 'connected.', 1)
+
+        return client
 
     def loop(self):
         addrs = self._scan()
         for addr in addrs:
-            self._connect(addr)
+                self._connect(addr)
 
         print('{} devices connected'.format(len(self.sensors)))
         while True:
-            print(self._aggregate())
+            payload = self._aggregate()
+            self.client.publish(
+                topic='gateway/'+config.DEVICE_NAME+'data',
+                payload=json.dumps(payload),
+                QoS=1
+            )
             time.sleep(10)
 
     def _scan(self):
