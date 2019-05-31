@@ -43,7 +43,7 @@ class Gateway(object):
         while True:
             payload = self._aggregate()
             self.client.publish(
-                topic='gateway/'+config.DEVICE_NAME+'data',
+                topic='gateway/'+config.DEVICE_NAME+'/data',
                 payload=json.dumps(payload),
                 QoS=1
             )
